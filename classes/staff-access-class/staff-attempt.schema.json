@@ -1,0 +1,55 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "com.clodhub/staff-attempt",
+  "x-version": "1.0.0",
+  "description": "A document of the staffAttempts collection as a records export writes it: the wrong PINs one client gave for one role in the window that started with the first.",
+  "type": "object",
+  "properties": {
+    "_id": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$",
+      "description": "SHA-256 of the role and the client's address: no address is kept."
+    },
+    "role": {
+      "enum": [
+        "admin",
+        "staff"
+      ]
+    },
+    "failures": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "startedAt": {
+      "$ref": "#/$defs/date"
+    },
+    "expiresAt": {
+      "$ref": "#/$defs/date"
+    }
+  },
+  "required": [
+    "_id",
+    "role",
+    "failures",
+    "startedAt",
+    "expiresAt"
+  ],
+  "additionalProperties": false,
+  "$defs": {
+    "date": {
+      "type": "object",
+      "properties": {
+        "$date": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "$date"
+      ],
+      "additionalProperties": false,
+      "description": "A date as a records export writes it."
+    }
+  },
+  "x-clodhub-modules": {}
+}

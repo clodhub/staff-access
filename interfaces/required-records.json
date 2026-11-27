@@ -1,0 +1,1001 @@
+{
+  "openrpc": "1.3.2",
+  "info": {
+    "title": "com.clodhub/records",
+    "version": "1.0.0",
+    "description": "Collections of documents with the part of the MongoDB query language the web shop uses, so stores can be swapped: memory-records keeps them in the process and a file, mongodb-records in a MongoDB database. Operations are asynchronous and copy documents in and out. A store's export can be imported by any other."
+  },
+  "methods": [
+    {
+      "name": "openRecords",
+      "description": "Opens the store with the installed settings (or `options.settings`). Every call in one process shares one store per database.",
+      "paramStructure": "by-position",
+      "params": [
+        {
+          "name": "options",
+          "required": false,
+          "schema": {
+            "$ref": "#/components/schemas/OpenOptions"
+          }
+        }
+      ],
+      "result": {
+        "name": "records",
+        "schema": {
+          "$ref": "#/components/schemas/Records"
+        }
+      },
+      "tags": [
+        {
+          "name": "typescript"
+        }
+      ],
+      "errors": [
+        {
+          "$ref": "#/components/errors/NotConfigured"
+        },
+        {
+          "$ref": "#/components/errors/Unavailable"
+        }
+      ]
+    },
+    {
+      "name": "Records.collection",
+      "description": "The collection with this name, created when first written.",
+      "paramStructure": "by-position",
+      "params": [
+        {
+          "name": "name",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "pattern": "^[A-Za-z][A-Za-z0-9_-]{0,63}$"
+          }
+        }
+      ],
+      "result": {
+        "name": "collection",
+        "schema": {
+          "$ref": "#/components/schemas/Collection"
+        }
+      },
+      "tags": [
+        {
+          "name": "typescript"
+        }
+      ],
+      "errors": [
+        {
+          "$ref": "#/components/errors/InvalidName"
+        },
+        {
+          "$ref": "#/components/errors/Unavailable"
+        }
+      ]
+    },
+    {
+      "name": "Records.exportAll",
+      "description": "Every collection as ndjson: one line per index, then one per document, collections in name order; dates as {\"$date\": ISO text}. Each line follows the records line schema (records-line.schema.json). The order of a collection's indexes and documents, and of the fields an update added, is not fixed: compare two exports document by document, by collection and _id.",
+      "paramStructure": "by-position",
+      "params": [],
+      "result": {
+        "name": "ndjson",
+        "schema": {
+          "type": "string"
+        }
+      },
+      "tags": [
+        {
+          "name": "typescript"
+        }
+      ],
+      "errors": [
+        {
+          "$ref": "#/components/errors/Unavailable"
+        }
+      ]
+    },
+    {
+      "name": "Records.importAll",
+      "description": "Adds the lines of an export. Every line is checked before any is written; a document whose _id or unique key is already present refuses the whole import.",
+      "paramStructure": "by-position",
+      "params": [
+        {
+          "name": "ndjson",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        }
+      ],
+      "result": {
+        "name": "result",
+        "schema": {
+          "$ref": "#/components/schemas/ImportResult"
+        }
+      },
+      "tags": [
+        {
+          "name": "typescript"
+        }
+      ],
+      "errors": [
+        {
+          "$ref": "#/components/errors/DuplicateKey"
+        },
+        {
+          "$ref": "#/components/errors/InvalidDocument"
+        },
+        {
+          "$ref": "#/components/errors/Unavailable"
+        }
+      ]
+    },
+    {
+      "name": "Records.close",
+      "description": "Releases the store; later calls on this handle fail with unavailable.",
+      "paramStructure": "by-position",
+      "params": [],
+      "result": {
+        "name": "result",
+        "schema": {
+          "type": "null"
+        }
+      },
+      "tags": [
+        {
+          "name": "typescript"
+        }
+      ]
+    },
+    {
+      "name": "Collection.insertOne",
+      "description": "Stores a copy of the document; a missing _id is generated. The argument is not changed.",
+      "paramStructure": "by-position",
+      "params": [
+        {
+          "name": "doc",
+          "required": true,
+          "schema": {
+            "type": "object"
+          }
+        }
+      ],
+      "result": {
+        "name": "result",
+        "schema": {
+          "type": "object",
+          "properties": {
+            "insertedId": {
+              "type": "string",
+              "pattern": "^.+$",
+              "description": "A document id: 24 lowercase hexadecimal characters when the store generates it."
+            }
+          },
+          "required": [
+            "insertedId"
+          ]
+        }
+      },
+      "tags": [
+        {
+          "name": "typescript"
+        }
+      ],
+      "errors": [
+        {
+          "$ref": "#/components/errors/DuplicateKey"
+        },
+        {
+          "$ref": "#/components/errors/InvalidDocument"
+        }
+      ]
+    },
+    {
+      "name": "Collection.findOne",
+      "description": "The first matching document in sort order after skip, or null; without a sort, which matching document is not fixed.",
+      "paramStructure": "by-position",
+      "params": [
+        {
+          "name": "filter",
+          "required": false,
+          "schema": {
+            "$ref": "#/components/schemas/Filter"
+          }
+        },
+        {
+          "name": "options",
+          "required": false,
+          "schema": {
+            "$ref": "#/components/schemas/FindOptions"
+          }
+        }
+      ],
+      "result": {
+        "name": "doc",
+        "schema": {
+          "oneOf": [
+            {
+              "$ref": "#/components/schemas/Doc"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "tags": [
+        {
+          "name": "typescript"
+        }
+      ],
+      "errors": [
+        {
+          "$ref": "#/components/errors/InvalidFilter"
+        }
+      ]
+    },
+    {
+      "name": "Collection.find",
+      "description": "The matching documents in sort order. Without a sort their order is not fixed (MongoDB gives the order of an index it uses), so sort whenever the order matters.",
+      "paramStructure": "by-position",
+      "params": [
+        {
+          "name": "filter",
+          "required": false,
+          "schema": {
+            "$ref": "#/components/schemas/Filter"
+          }
+        },
+        {
+          "name": "options",
+          "required": false,
+          "schema": {
+            "$ref": "#/components/schemas/FindOptions"
+          }
+        }
+      ],
+      "result": {
+        "name": "docs",
+        "schema": {
+          "type": "array",
+          "items": {
+            "$ref": "#/components/schemas/Doc"
+          }
+        }
+      },
+      "tags": [
+        {
+          "name": "typescript"
+        }
+      ],
+      "errors": [
+        {
+          "$ref": "#/components/errors/InvalidFilter"
+        }
+      ]
+    },
+    {
+      "name": "Collection.countDocuments",
+      "description": "How many documents match.",
+      "paramStructure": "by-position",
+      "params": [
+        {
+          "name": "filter",
+          "required": false,
+          "schema": {
+            "$ref": "#/components/schemas/Filter"
+          }
+        }
+      ],
+      "result": {
+        "name": "count",
+        "schema": {
+          "type": "integer"
+        }
+      },
+      "tags": [
+        {
+          "name": "typescript"
+        }
+      ],
+      "errors": [
+        {
+          "$ref": "#/components/errors/InvalidFilter"
+        }
+      ]
+    },
+    {
+      "name": "Collection.updateOne",
+      "description": "Changes one matching document (which one is not fixed when several match). With upsert and no match, inserts the filter's equality fields with the update applied: field values, $eq and a $in of one value, also inside $and and a one-clause $or; a field given twice is refused. The new document's _id is the one the filter or $set gives, else a generated one.",
+      "paramStructure": "by-position",
+      "params": [
+        {
+          "name": "filter",
+          "required": true,
+          "schema": {
+            "$ref": "#/components/schemas/Filter"
+          }
+        },
+        {
+          "name": "update",
+          "required": true,
+          "schema": {
+            "$ref": "#/components/schemas/Update"
+          }
+        },
+        {
+          "name": "options",
+          "required": false,
+          "schema": {
+            "$ref": "#/components/schemas/UpdateOptions"
+          }
+        }
+      ],
+      "result": {
+        "name": "result",
+        "schema": {
+          "$ref": "#/components/schemas/UpdateResult"
+        }
+      },
+      "tags": [
+        {
+          "name": "typescript"
+        }
+      ],
+      "errors": [
+        {
+          "$ref": "#/components/errors/InvalidFilter"
+        },
+        {
+          "$ref": "#/components/errors/InvalidUpdate"
+        },
+        {
+          "$ref": "#/components/errors/DuplicateKey"
+        },
+        {
+          "$ref": "#/components/errors/InvalidDocument"
+        }
+      ]
+    },
+    {
+      "name": "Collection.updateMany",
+      "description": "Changes every matching document.",
+      "paramStructure": "by-position",
+      "params": [
+        {
+          "name": "filter",
+          "required": true,
+          "schema": {
+            "$ref": "#/components/schemas/Filter"
+          }
+        },
+        {
+          "name": "update",
+          "required": true,
+          "schema": {
+            "$ref": "#/components/schemas/Update"
+          }
+        }
+      ],
+      "result": {
+        "name": "result",
+        "schema": {
+          "type": "object",
+          "properties": {
+            "matchedCount": {
+              "type": "integer"
+            },
+            "modifiedCount": {
+              "type": "integer"
+            }
+          },
+          "required": [
+            "matchedCount",
+            "modifiedCount"
+          ]
+        }
+      },
+      "tags": [
+        {
+          "name": "typescript"
+        }
+      ],
+      "errors": [
+        {
+          "$ref": "#/components/errors/InvalidFilter"
+        },
+        {
+          "$ref": "#/components/errors/InvalidUpdate"
+        },
+        {
+          "$ref": "#/components/errors/DuplicateKey"
+        },
+        {
+          "$ref": "#/components/errors/InvalidDocument"
+        }
+      ]
+    },
+    {
+      "name": "Collection.findOneAndUpdate",
+      "description": "Changes the first matching document in sort order (without a sort, which one is not fixed) in one step and returns it as it was (returnDocument before, the default) or as it became; of two callers racing for one document only one matches. With upsert and no match it inserts as updateOne does and gives null for returnDocument before.",
+      "paramStructure": "by-position",
+      "params": [
+        {
+          "name": "filter",
+          "required": true,
+          "schema": {
+            "$ref": "#/components/schemas/Filter"
+          }
+        },
+        {
+          "name": "update",
+          "required": true,
+          "schema": {
+            "$ref": "#/components/schemas/Update"
+          }
+        },
+        {
+          "name": "options",
+          "required": false,
+          "schema": {
+            "$ref": "#/components/schemas/FindOneAndUpdateOptions"
+          }
+        }
+      ],
+      "result": {
+        "name": "doc",
+        "schema": {
+          "oneOf": [
+            {
+              "$ref": "#/components/schemas/Doc"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "tags": [
+        {
+          "name": "typescript"
+        }
+      ],
+      "errors": [
+        {
+          "$ref": "#/components/errors/InvalidFilter"
+        },
+        {
+          "$ref": "#/components/errors/InvalidUpdate"
+        },
+        {
+          "$ref": "#/components/errors/DuplicateKey"
+        },
+        {
+          "$ref": "#/components/errors/InvalidDocument"
+        }
+      ]
+    },
+    {
+      "name": "Collection.deleteOne",
+      "description": "Removes one matching document (which one is not fixed when several match).",
+      "paramStructure": "by-position",
+      "params": [
+        {
+          "name": "filter",
+          "required": true,
+          "schema": {
+            "$ref": "#/components/schemas/Filter"
+          }
+        }
+      ],
+      "result": {
+        "name": "result",
+        "schema": {
+          "type": "object",
+          "properties": {
+            "deletedCount": {
+              "type": "integer"
+            }
+          },
+          "required": [
+            "deletedCount"
+          ]
+        }
+      },
+      "tags": [
+        {
+          "name": "typescript"
+        }
+      ],
+      "errors": [
+        {
+          "$ref": "#/components/errors/InvalidFilter"
+        }
+      ]
+    },
+    {
+      "name": "Collection.deleteMany",
+      "description": "Removes every matching document.",
+      "paramStructure": "by-position",
+      "params": [
+        {
+          "name": "filter",
+          "required": true,
+          "schema": {
+            "$ref": "#/components/schemas/Filter"
+          }
+        }
+      ],
+      "result": {
+        "name": "result",
+        "schema": {
+          "type": "object",
+          "properties": {
+            "deletedCount": {
+              "type": "integer"
+            }
+          },
+          "required": [
+            "deletedCount"
+          ]
+        }
+      },
+      "tags": [
+        {
+          "name": "typescript"
+        }
+      ],
+      "errors": [
+        {
+          "$ref": "#/components/errors/InvalidFilter"
+        }
+      ]
+    },
+    {
+      "name": "Collection.createIndexes",
+      "description": "Adds the indexes; one with the key of an index already there and other options replaces it. A unique index the documents break is refused, and the index it would replace stays.",
+      "paramStructure": "by-position",
+      "params": [
+        {
+          "name": "indexes",
+          "required": true,
+          "schema": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/IndexSpec"
+            }
+          }
+        }
+      ],
+      "result": {
+        "name": "result",
+        "schema": {
+          "type": "null"
+        }
+      },
+      "tags": [
+        {
+          "name": "typescript"
+        }
+      ],
+      "errors": [
+        {
+          "$ref": "#/components/errors/InvalidFilter"
+        },
+        {
+          "$ref": "#/components/errors/DuplicateKey"
+        }
+      ]
+    },
+    {
+      "name": "Collection.listIndexes",
+      "description": "The indexes created on the collection, without the built-in _id index, in no fixed order.",
+      "paramStructure": "by-position",
+      "params": [],
+      "result": {
+        "name": "indexes",
+        "schema": {
+          "type": "array",
+          "items": {
+            "$ref": "#/components/schemas/IndexSpec"
+          }
+        }
+      },
+      "tags": [
+        {
+          "name": "typescript"
+        }
+      ]
+    },
+    {
+      "name": "isDuplicateKey",
+      "description": "Whether an error is a records duplicate-key error.",
+      "paramStructure": "by-position",
+      "params": [
+        {
+          "name": "error",
+          "required": true,
+          "schema": {}
+        }
+      ],
+      "result": {
+        "name": "result",
+        "schema": {
+          "type": "boolean"
+        }
+      },
+      "tags": [
+        {
+          "name": "typescript"
+        }
+      ]
+    },
+    {
+      "name": "newId",
+      "description": "A new document id: the creation second as 8 hexadecimal characters, then 8 random bytes.",
+      "paramStructure": "by-position",
+      "params": [
+        {
+          "name": "now",
+          "required": false,
+          "schema": {
+            "description": "A function returning the current Date."
+          }
+        }
+      ],
+      "result": {
+        "name": "id",
+        "schema": {
+          "type": "string",
+          "pattern": "^.+$",
+          "description": "A document id: 24 lowercase hexadecimal characters when the store generates it."
+        }
+      },
+      "tags": [
+        {
+          "name": "typescript"
+        }
+      ]
+    },
+    {
+      "name": "validName",
+      "description": "Whether a collection name is allowed.",
+      "paramStructure": "by-position",
+      "params": [
+        {
+          "name": "name",
+          "required": true,
+          "schema": {}
+        }
+      ],
+      "result": {
+        "name": "result",
+        "schema": {
+          "type": "boolean"
+        }
+      },
+      "tags": [
+        {
+          "name": "typescript"
+        }
+      ]
+    },
+    {
+      "name": "RecordsError",
+      "description": "The error every store operation throws, with one of the RecordsErrorCode codes.",
+      "paramStructure": "by-position",
+      "params": [
+        {
+          "name": "code",
+          "required": true,
+          "schema": {
+            "$ref": "#/components/schemas/RecordsErrorCode"
+          }
+        },
+        {
+          "name": "message",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        }
+      ],
+      "result": {
+        "name": "error",
+        "schema": {
+          "type": "object"
+        }
+      },
+      "tags": [
+        {
+          "name": "typescript"
+        }
+      ]
+    }
+  ],
+  "components": {
+    "schemas": {
+      "Doc": {
+        "type": "object",
+        "properties": {
+          "_id": {
+            "type": "string",
+            "pattern": "^.+$",
+            "description": "A document id: 24 lowercase hexadecimal characters when the store generates it."
+          }
+        },
+        "required": [
+          "_id"
+        ],
+        "additionalProperties": true,
+        "description": "A stored document. Values are objects, arrays, text, finite numbers, booleans, null and dates; a field whose value is undefined is not stored and an undefined array item becomes null. A field name is not empty, does not start with $, holds no dot and no NUL character, and is not __proto__. A store may refuse a document over 16 MB or nested deeper than 50 levels. Fields written in one value keep their order; the order of the fields an update or an upsert adds is not fixed."
+      },
+      "Filter": {
+        "type": "object",
+        "additionalProperties": true,
+        "description": "Field equality (dotted paths; a field holding an array matches when it or any element matches; null matches null and a missing field), the operators $eq $ne $gt $gte $lt $lte $in $nin $exists, and top-level $or and $and. $ne and $nin match a missing field. Equality with an object needs the same fields in the same order. Comparisons apply between two numbers, two texts (in the order of their characters' code points) or two dates, and with any other value match nothing. Every value in a filter is one a document could hold, and a condition whose value is undefined is refused. The whole filter is checked before any document is read."
+      },
+      "Update": {
+        "type": "object",
+        "properties": {
+          "$set": {
+            "type": "object",
+            "additionalProperties": true
+          },
+          "$unset": {
+            "type": "object",
+            "additionalProperties": true
+          },
+          "$inc": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "number"
+            }
+          }
+        },
+        "additionalProperties": false,
+        "minProperties": 1,
+        "description": "One or more of $set, $unset and $inc (a missing field counts as 0). A dotted path creates the objects missing on its way and is refused through any other value, null included; a position past the end of an array fills the gap with null. A $set of undefined removes the field. A field changes once per update, and a field and a field inside it count as one; _id never changes."
+      },
+      "Sort": {
+        "type": "object",
+        "additionalProperties": {
+          "enum": [
+            1,
+            -1
+          ]
+        },
+        "description": "Ascending (1) or descending (-1) per field. Missing and null come first ascending, then numbers, texts (by code point), objects, booleans (false first) and dates. Not fixed: the order of documents that sort equal, of objects among themselves, and of documents whose sort field holds an array or is reached through one. End a sort with _id when the order must be the same every time."
+      },
+      "FindOptions": {
+        "type": "object",
+        "properties": {
+          "sort": {
+            "$ref": "#/components/schemas/Sort"
+          },
+          "skip": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "limit": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "0 is no limit."
+          },
+          "projection": {
+            "type": "object",
+            "additionalProperties": {
+              "enum": [
+                0,
+                1
+              ]
+            },
+            "description": "Top-level fields to include (1, with _id unless _id is 0) or to exclude (0); { _id: 1 } alone gives only _id."
+          }
+        },
+        "additionalProperties": false
+      },
+      "UpdateOptions": {
+        "type": "object",
+        "properties": {
+          "upsert": {
+            "type": "boolean"
+          }
+        },
+        "additionalProperties": false
+      },
+      "FindOneAndUpdateOptions": {
+        "type": "object",
+        "properties": {
+          "returnDocument": {
+            "enum": [
+              "before",
+              "after"
+            ],
+            "default": "before"
+          },
+          "upsert": {
+            "type": "boolean"
+          },
+          "sort": {
+            "$ref": "#/components/schemas/Sort"
+          }
+        },
+        "additionalProperties": false
+      },
+      "IndexSpec": {
+        "type": "object",
+        "properties": {
+          "key": {
+            "type": "object",
+            "additionalProperties": {
+              "enum": [
+                1,
+                -1
+              ]
+            },
+            "minProperties": 1
+          },
+          "unique": {
+            "type": "boolean"
+          },
+          "sparse": {
+            "type": "boolean"
+          },
+          "expireAfterSeconds": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 2147483647,
+            "description": "On a one-field index of dates: documents whose date is older are removed. Stores may remove them up to a minute late, so callers check expiry dates themselves."
+          }
+        },
+        "required": [
+          "key"
+        ],
+        "additionalProperties": false,
+        "description": "An index is its key: fields in order with their directions. A unique index refuses a second document with the same key values, a missing field counting as null; a sparse index leaves out a document that has none of its fields. A unique index applies to fields with single values: on a field that holds arrays, which documents it refuses is not fixed."
+      },
+      "UpdateResult": {
+        "type": "object",
+        "properties": {
+          "matchedCount": {
+            "type": "integer"
+          },
+          "modifiedCount": {
+            "type": "integer"
+          },
+          "upsertedId": {
+            "oneOf": [
+              {
+                "type": "string",
+                "pattern": "^.+$",
+                "description": "A document id: 24 lowercase hexadecimal characters when the store generates it."
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "matchedCount",
+          "modifiedCount",
+          "upsertedId"
+        ],
+        "additionalProperties": false
+      },
+      "ImportResult": {
+        "type": "object",
+        "properties": {
+          "collections": {
+            "type": "integer"
+          },
+          "records": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "collections",
+          "records"
+        ],
+        "additionalProperties": false
+      },
+      "OpenOptions": {
+        "type": "object",
+        "properties": {
+          "env": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            },
+            "description": "Environment variables to read secrets from; the server's environment by default."
+          },
+          "driver": {
+            "description": "Given by checks: an object whose db(name) returns a database with the MongoDB Node driver's collection methods. A store that keeps documents itself ignores it."
+          },
+          "directory": {
+            "oneOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Where a store that writes files keeps them; null keeps nothing on disk."
+          },
+          "now": {
+            "description": "A function returning the current Date, for expiry and generated ids."
+          },
+          "settings": {
+            "type": "object",
+            "description": "Settings that replace the installed ones, such as database."
+          }
+        },
+        "additionalProperties": false
+      },
+      "Records": {
+        "type": "object",
+        "description": "An open store. Documents are copied on the way in and out: callers never share objects with it.",
+        "properties": {
+          "kind": {
+            "type": "string",
+            "description": "Which store: memory or mongodb."
+          }
+        },
+        "required": [
+          "kind"
+        ]
+      },
+      "Collection": {
+        "type": "object",
+        "description": "One named collection of documents."
+      },
+      "RecordsErrorCode": {
+        "enum": [
+          "duplicate-key",
+          "invalid-filter",
+          "invalid-update",
+          "invalid-document",
+          "invalid-name",
+          "not-configured",
+          "unavailable"
+        ]
+      }
+    },
+    "errors": {
+      "DuplicateKey": {
+        "code": -32010,
+        "message": "RecordsError duplicate-key: a document with that _id or unique index key exists"
+      },
+      "InvalidFilter": {
+        "code": -32011,
+        "message": "RecordsError invalid-filter: a filter, sort, projection or index the subset does not allow"
+      },
+      "InvalidUpdate": {
+        "code": -32012,
+        "message": "RecordsError invalid-update: an update the subset does not allow"
+      },
+      "InvalidDocument": {
+        "code": -32013,
+        "message": "RecordsError invalid-document: a value or field name that cannot be stored"
+      },
+      "InvalidName": {
+        "code": -32014,
+        "message": "RecordsError invalid-name: a collection name outside [A-Za-z][A-Za-z0-9_-]{0,63}"
+      },
+      "NotConfigured": {
+        "code": -32015,
+        "message": "RecordsError not-configured: the store has no address or credentials"
+      },
+      "Unavailable": {
+        "code": -32016,
+        "message": "RecordsError unavailable: the store cannot be reached or is closed"
+      }
+    }
+  },
+  "x-clodhub-modules": {
+    "server": "server/index.ts"
+  }
+}

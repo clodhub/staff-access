@@ -1,0 +1,46 @@
+{
+  "format": 1,
+  "stores": [
+    {
+      "id": "staffAttempts",
+      "schema": {
+        "name": "com.clodhub/staff-attempt",
+        "version": "1.0.0",
+        "file": "interfaces/staff-attempt.schema.json"
+      }
+    }
+  ],
+  "export": [
+    {
+      "format": "ndjson",
+      "portable": true,
+      "operation": "exportAll",
+      "description": "The records store's exportAll: the staffAttempts collection's index, then one document line per open window of wrong PINs, dates as {\"$date\": ISO text}."
+    }
+  ],
+  "import": [
+    {
+      "format": "ndjson",
+      "portable": true,
+      "operation": "importAll"
+    }
+  ],
+  "steps": [],
+  "verification": {
+    "counts": true,
+    "checksums": "none: compare the exported lines of the staffAttempts collection in the source and the destination",
+    "sampleReadBack": 20,
+    "endToEnd": "tests/web.test.ts"
+  },
+  "limits": {
+    "maxMegabytes": 10,
+    "requiresStop": false,
+    "cannotPreserve": [
+      "windows that end between the export and the import",
+      "wrong PINs given while the export runs"
+    ]
+  },
+  "retention": {
+    "afterRemovalDays": 0
+  }
+}

@@ -1,0 +1,721 @@
+{
+  "openrpc": "1.3.2",
+  "info": {
+    "title": "com.clodhub/staff-access",
+    "version": "1.0.0",
+    "description": "PIN sign-in for the shop's two staff roles, admin and staff, and the signed sessions that prove them on later requests, as cookies for a browser and bearer tokens for an app. PINs and the session secret come from the server's environment and never reach a client; sessions are HMAC-SHA-256 signed with a key made from the secret and the role's PIN, and compared in constant time. Wrong PINs are counted per role and client in a records store. Server only."
+  },
+  "methods": [
+    {
+      "name": "createStaffAccess",
+      "description": "Staff access with the installed settings (or `options.settings`), the PINs and the session secret read from the environment variables the settings name, and the wrong PINs counted in the records store.",
+      "paramStructure": "by-position",
+      "params": [
+        {
+          "name": "options",
+          "required": true,
+          "schema": {
+            "$ref": "#/components/schemas/CreateOptions"
+          }
+        }
+      ],
+      "result": {
+        "name": "access",
+        "schema": {
+          "$ref": "#/components/schemas/StaffAccess"
+        }
+      },
+      "tags": [
+        {
+          "name": "typescript"
+        }
+      ],
+      "errors": [
+        {
+          "$ref": "#/components/errors/InvalidSettings"
+        },
+        {
+          "$ref": "#/components/errors/InvalidDependencies"
+        }
+      ]
+    },
+    {
+      "name": "StaffAccess.ensureIndexes",
+      "description": "Creates the staffAttempts collection's index: expiresAt with expireAfterSeconds 0, so the store removes a window once it ends. login also creates it before its first write.",
+      "paramStructure": "by-position",
+      "params": [],
+      "result": {
+        "name": "result",
+        "schema": {
+          "type": "null"
+        }
+      },
+      "tags": [
+        {
+          "name": "typescript"
+        }
+      ],
+      "errors": [
+        {
+          "$ref": "#/components/errors/StoreError"
+        }
+      ]
+    },
+    {
+      "name": "StaffAccess.login",
+      "description": "Checks a PIN for a role. The right PIN gives the session: its token (the cookie's value and the bearer token), when it ends (sessionDays ahead) and the Set-Cookie header of a signed, HttpOnly, SameSite=Lax cookie that lasts as long; the token is HMAC-SHA-256 signed with a key made from the server's secret and the role's PIN. A wrong PIN and a missing or non-text one give the same 401 INVALID_PIN, and the comparison takes the same time wherever the PINs differ. After maximumAttempts wrong PINs for the role from one client within attemptWindowMinutes of the first, every attempt from that client for that role, right or wrong, gives 429 TOO_MANY_ATTEMPTS with the seconds left of the window; a right PIN before then clears the count. A role with no PIN, or a server without its session secret, gives 503 NOT_CONFIGURED for every attempt.",
+      "paramStructure": "by-position",
+      "params": [
+        {
+          "name": "role",
+          "required": true,
+          "schema": {
+            "$ref": "#/components/schemas/Role"
+          }
+        },
+        {
+          "name": "pin",
+          "required": true,
+          "schema": {}
+        },
+        {
+          "name": "options",
+          "required": false,
+          "schema": {
+            "$ref": "#/components/schemas/LoginOptions"
+          }
+        }
+      ],
+      "result": {
+        "name": "result",
+        "schema": {
+          "$ref": "#/components/schemas/LoginResult"
+        }
+      },
+      "tags": [
+        {
+          "name": "typescript"
+        }
+      ],
+      "errors": [
+        {
+          "$ref": "#/components/errors/InvalidRole"
+        },
+        {
+          "$ref": "#/components/errors/StoreError"
+        }
+      ]
+    },
+    {
+      "name": "StaffAccess.role",
+      "description": "The role a request's cookies prove: admin when the admin cookie is valid, else staff when the staff cookie is, else null.",
+      "paramStructure": "by-position",
+      "params": [
+        {
+          "name": "cookieHeader",
+          "required": true,
+          "schema": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "The request's Cookie header, or null when it has none."
+          }
+        }
+      ],
+      "result": {
+        "name": "role",
+        "schema": {
+          "oneOf": [
+            {
+              "$ref": "#/components/schemas/Role"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "tags": [
+        {
+          "name": "typescript"
+        }
+      ]
+    },
+    {
+      "name": "StaffAccess.allows",
+      "description": "Whether the request may do what the role needs: an admin passes every check, staff pass staff checks only.",
+      "paramStructure": "by-position",
+      "params": [
+        {
+          "name": "cookieHeader",
+          "required": true,
+          "schema": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "The request's Cookie header, or null when it has none."
+          }
+        },
+        {
+          "name": "needed",
+          "required": true,
+          "schema": {
+            "$ref": "#/components/schemas/Role"
+          }
+        }
+      ],
+      "result": {
+        "name": "allowed",
+        "schema": {
+          "type": "boolean"
+        }
+      },
+      "tags": [
+        {
+          "name": "typescript"
+        }
+      ],
+      "errors": [
+        {
+          "$ref": "#/components/errors/InvalidRole"
+        }
+      ]
+    },
+    {
+      "name": "StaffAccess.requestRole",
+      "description": "The role a request proves: by its bearer token when it has an Authorization: Bearer header (and then by nothing else), else by its cookies as role does.",
+      "paramStructure": "by-position",
+      "params": [
+        {
+          "name": "request",
+          "required": true,
+          "schema": {
+            "type": "object",
+            "description": "A request: a Fetch Request, or any object whose headers.get(name) gives a header or null."
+          }
+        }
+      ],
+      "result": {
+        "name": "role",
+        "schema": {
+          "oneOf": [
+            {
+              "$ref": "#/components/schemas/Role"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "tags": [
+        {
+          "name": "typescript"
+        }
+      ]
+    },
+    {
+      "name": "StaffAccess.requestAllows",
+      "description": "Whether the request may do what the role needs, its role read as requestRole reads it.",
+      "paramStructure": "by-position",
+      "params": [
+        {
+          "name": "request",
+          "required": true,
+          "schema": {
+            "type": "object",
+            "description": "A request: a Fetch Request, or any object whose headers.get(name) gives a header or null."
+          }
+        },
+        {
+          "name": "needed",
+          "required": true,
+          "schema": {
+            "$ref": "#/components/schemas/Role"
+          }
+        }
+      ],
+      "result": {
+        "name": "allowed",
+        "schema": {
+          "type": "boolean"
+        }
+      },
+      "tags": [
+        {
+          "name": "typescript"
+        }
+      ],
+      "errors": [
+        {
+          "$ref": "#/components/errors/InvalidRole"
+        }
+      ]
+    },
+    {
+      "name": "StaffAccess.logout",
+      "description": "The Set-Cookie header value that removes the role's cookie.",
+      "paramStructure": "by-position",
+      "params": [
+        {
+          "name": "role",
+          "required": true,
+          "schema": {
+            "$ref": "#/components/schemas/Role"
+          }
+        }
+      ],
+      "result": {
+        "name": "setCookie",
+        "schema": {
+          "type": "string"
+        }
+      },
+      "tags": [
+        {
+          "name": "typescript"
+        }
+      ],
+      "errors": [
+        {
+          "$ref": "#/components/errors/InvalidRole"
+        }
+      ]
+    },
+    {
+      "name": "StaffAccess.configured",
+      "description": "Whether the role has a PIN and the server its session secret in the environment, so its sign-in page can say it is closed.",
+      "paramStructure": "by-position",
+      "params": [
+        {
+          "name": "role",
+          "required": true,
+          "schema": {
+            "$ref": "#/components/schemas/Role"
+          }
+        }
+      ],
+      "result": {
+        "name": "configured",
+        "schema": {
+          "type": "boolean"
+        }
+      },
+      "tags": [
+        {
+          "name": "typescript"
+        }
+      ],
+      "errors": [
+        {
+          "$ref": "#/components/errors/InvalidRole"
+        }
+      ]
+    },
+    {
+      "name": "parseCookies",
+      "description": "The cookies of a Cookie header by name, values percent-decoded; the first of two with one name wins.",
+      "paramStructure": "by-position",
+      "params": [
+        {
+          "name": "header",
+          "required": true,
+          "schema": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "The request's Cookie header, or null when it has none."
+          }
+        }
+      ],
+      "result": {
+        "name": "cookies",
+        "schema": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          }
+        }
+      },
+      "tags": [
+        {
+          "name": "typescript"
+        }
+      ]
+    },
+    {
+      "name": "serialiseCookie",
+      "description": "A Set-Cookie header value; the value is percent-encoded and Path is / unless given.",
+      "paramStructure": "by-position",
+      "params": [
+        {
+          "name": "name",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        },
+        {
+          "name": "value",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        },
+        {
+          "name": "options",
+          "required": false,
+          "schema": {
+            "$ref": "#/components/schemas/CookieOptions"
+          }
+        }
+      ],
+      "result": {
+        "name": "setCookie",
+        "schema": {
+          "type": "string"
+        }
+      },
+      "tags": [
+        {
+          "name": "typescript"
+        }
+      ],
+      "errors": [
+        {
+          "$ref": "#/components/errors/InvalidCookie"
+        }
+      ]
+    },
+    {
+      "name": "settingsFrom",
+      "description": "Converts and checks settings given as values or as rendered template text; unset and unrendered values take the defaults (DEFAULT_SETTINGS).",
+      "paramStructure": "by-position",
+      "params": [
+        {
+          "name": "raw",
+          "required": true,
+          "schema": {
+            "$ref": "#/components/schemas/RawSettings"
+          }
+        }
+      ],
+      "result": {
+        "name": "settings",
+        "schema": {
+          "$ref": "#/components/schemas/StaffAccessSettings"
+        }
+      },
+      "tags": [
+        {
+          "name": "typescript"
+        }
+      ],
+      "errors": [
+        {
+          "$ref": "#/components/errors/InvalidSettings"
+        }
+      ]
+    },
+    {
+      "name": "installedSettings",
+      "description": "The settings clod rendered at install, converted by settingsFrom.",
+      "paramStructure": "by-position",
+      "params": [],
+      "result": {
+        "name": "settings",
+        "schema": {
+          "$ref": "#/components/schemas/StaffAccessSettings"
+        }
+      },
+      "tags": [
+        {
+          "name": "typescript"
+        }
+      ],
+      "errors": [
+        {
+          "$ref": "#/components/errors/InvalidSettings"
+        }
+      ]
+    }
+  ],
+  "components": {
+    "schemas": {
+      "Role": {
+        "enum": [
+          "admin",
+          "staff"
+        ],
+        "description": "admin manages the shop (promotions, member pricing, gift cards, schedule); staff look up and redeem codes. An admin passes every staff check."
+      },
+      "StaffAccessSettings": {
+        "type": "object",
+        "properties": {
+          "adminPinVariable": {
+            "type": "string",
+            "pattern": "^[A-Z][A-Z0-9_]{0,63}$",
+            "default": "ADMIN_PIN",
+            "description": "The environment variable that holds the admin PIN."
+          },
+          "staffPinVariable": {
+            "type": "string",
+            "pattern": "^[A-Z][A-Z0-9_]{0,63}$",
+            "default": "STAFF_PIN",
+            "description": "The environment variable that holds the staff PIN."
+          },
+          "sessionSecretVariable": {
+            "type": "string",
+            "pattern": "^[A-Z][A-Z0-9_]{0,63}$",
+            "default": "STAFF_SESSION_SECRET",
+            "description": "The environment variable that holds the server's secret sessions are signed with."
+          },
+          "adminCookie": {
+            "type": "string",
+            "pattern": "^[A-Za-z][A-Za-z0-9_]{0,63}$",
+            "default": "shop_admin"
+          },
+          "staffCookie": {
+            "type": "string",
+            "pattern": "^[A-Za-z][A-Za-z0-9_]{0,63}$",
+            "default": "shop_staff"
+          },
+          "sessionDays": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 365,
+            "default": 7,
+            "description": "How long a sign-in lasts."
+          },
+          "maximumAttempts": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 100,
+            "default": 5,
+            "description": "Wrong PINs a role takes from one client address in a window before it refuses that client."
+          },
+          "attemptWindowMinutes": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 1440,
+            "default": 15,
+            "description": "The window, from a client's first wrong PIN for a role."
+          }
+        },
+        "required": [
+          "adminPinVariable",
+          "staffPinVariable",
+          "sessionSecretVariable",
+          "adminCookie",
+          "staffCookie",
+          "sessionDays",
+          "maximumAttempts",
+          "attemptWindowMinutes"
+        ],
+        "additionalProperties": false,
+        "description": "The two cookie names differ, and so do the three variable names."
+      },
+      "RawSettings": {
+        "type": "object",
+        "additionalProperties": true,
+        "description": "Settings as values or as the text clod renders into the settings template; a missing value, or one still in its {{name}} form, takes the default."
+      },
+      "CreateOptions": {
+        "type": "object",
+        "properties": {
+          "records": {
+            "description": "A records store (com.clodhub/records): the wrong PINs are counted in its staffAttempts collection (ATTEMPTS_COLLECTION), so every server instance sees them."
+          },
+          "env": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            },
+            "description": "Where the PINs and the session secret are read, under the names the settings give; the server's environment by default. A role whose PIN variable is unset or blank, and both roles while the secret's is, cannot be signed in to. A PIN of fewer than 6 characters (MINIMUM_PIN_LENGTH) or a secret of fewer than 32 (MINIMUM_SECRET_LENGTH) is refused when the access is created."
+          },
+          "settings": {
+            "type": "object",
+            "description": "Settings that replace the installed ones."
+          },
+          "secure": {
+            "type": "boolean",
+            "default": true,
+            "description": "Mark cookies Secure (false only for http://localhost)."
+          },
+          "now": {
+            "description": "A function returning the current Date, for sessions and attempt windows."
+          }
+        },
+        "required": [
+          "records"
+        ],
+        "additionalProperties": false
+      },
+      "LoginResult": {
+        "oneOf": [
+          {
+            "type": "object",
+            "properties": {
+              "ok": {
+                "const": true
+              },
+              "token": {
+                "type": "string",
+                "pattern": "^[0-9]{1,12}\\.[A-Za-z0-9_-]{43}$",
+                "description": "The session: the cookie's value, and the bearer token an app sends as Authorization: Bearer <token>."
+              },
+              "expiresAt": {
+                "type": "string",
+                "format": "date-time",
+                "description": "When the session ends."
+              },
+              "setCookie": {
+                "type": "string",
+                "description": "The Set-Cookie header value."
+              }
+            },
+            "required": [
+              "ok",
+              "token",
+              "expiresAt",
+              "setCookie"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "ok": {
+                "const": false
+              },
+              "status": {
+                "enum": [
+                  401,
+                  503
+                ]
+              },
+              "code": {
+                "enum": [
+                  "INVALID_PIN",
+                  "NOT_CONFIGURED"
+                ]
+              }
+            },
+            "required": [
+              "ok",
+              "status",
+              "code"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "ok": {
+                "const": false
+              },
+              "status": {
+                "const": 429
+              },
+              "code": {
+                "const": "TOO_MANY_ATTEMPTS"
+              },
+              "retryAfter": {
+                "type": "integer",
+                "minimum": 1,
+                "description": "Seconds until the client may try again."
+              }
+            },
+            "required": [
+              "ok",
+              "status",
+              "code",
+              "retryAfter"
+            ],
+            "additionalProperties": false
+          }
+        ]
+      },
+      "LoginOptions": {
+        "type": "object",
+        "properties": {
+          "client": {
+            "type": "string",
+            "description": "The client's address, as the host's proxy gives it; requests without one share one count."
+          }
+        },
+        "additionalProperties": false
+      },
+      "CookieOptions": {
+        "type": "object",
+        "properties": {
+          "maxAge": {
+            "type": "integer",
+            "description": "Seconds; 0 removes the cookie."
+          },
+          "secure": {
+            "type": "boolean"
+          },
+          "httpOnly": {
+            "type": "boolean"
+          },
+          "sameSite": {
+            "enum": [
+              "Lax",
+              "Strict",
+              "None"
+            ]
+          },
+          "path": {
+            "type": "string",
+            "default": "/"
+          },
+          "domain": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      },
+      "StaffAccess": {
+        "type": "object",
+        "properties": {
+          "settings": {
+            "$ref": "#/components/schemas/StaffAccessSettings"
+          }
+        },
+        "required": [
+          "settings"
+        ],
+        "description": "Signs staff in with a PIN and recognises them by a signed session, as a cookie or a bearer token. Every check fails closed: a role without a PIN, a server without its session secret, a missing, altered, expired or foreign session, and a session signed before its PIN or the secret changed all give no role."
+      }
+    },
+    "errors": {
+      "InvalidSettings": {
+        "code": -32030,
+        "message": "RangeError: a setting is not of its form or outside its range, two cookie or variable names are equal, a PIN in the environment has fewer than 6 characters or the session secret fewer than 32"
+      },
+      "InvalidRole": {
+        "code": -32031,
+        "message": "RangeError: the role is neither admin nor staff"
+      },
+      "InvalidCookie": {
+        "code": -32032,
+        "message": "RangeError: a cookie name, domain, path, maxAge or sameSite that a browser would refuse"
+      },
+      "InvalidDependencies": {
+        "code": -32033,
+        "message": "TypeError: records is missing"
+      },
+      "StoreError": {
+        "code": -32034,
+        "message": "A records store error (unavailable, ...) is passed on unchanged"
+      }
+    }
+  },
+  "x-clodhub-modules": {
+    "server": "server/index.ts"
+  }
+}

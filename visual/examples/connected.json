@@ -1,0 +1,199 @@
+{
+  "schemaVersion": 1,
+  "id": "staff-access-connected",
+  "title": "Staff access: connected consumer",
+  "status": "example",
+  "view": "component",
+  "focus": "component",
+  "definitions": [
+    {
+      "id": "com.clodhub.staff-access",
+      "name": "Staff access",
+      "kind": "component",
+      "status": "example",
+      "package": "pkg:clod/com.clodhub/staff-access",
+      "version": "0.1.0",
+      "ports": [
+        {
+          "id": "records",
+          "name": "Records",
+          "direction": "input",
+          "kind": "interface",
+          "type": "com.clodhub/records",
+          "version": "1.0.0",
+          "required": true,
+          "cardinality": "one"
+        },
+        {
+          "id": "staff-access",
+          "name": "Staff access",
+          "direction": "output",
+          "kind": "interface",
+          "type": "com.clodhub/staff-access",
+          "version": "1.0.0"
+        }
+      ],
+      "settings": [
+        {
+          "id": "adminPinVariable",
+          "name": "Adminpinvariable",
+          "type": "string",
+          "required": false,
+          "secret": false,
+          "default": "ADMIN_PIN"
+        },
+        {
+          "id": "staffPinVariable",
+          "name": "Staffpinvariable",
+          "type": "string",
+          "required": false,
+          "secret": false,
+          "default": "STAFF_PIN"
+        },
+        {
+          "id": "sessionSecretVariable",
+          "name": "Sessionsecretvariable",
+          "type": "string",
+          "required": false,
+          "secret": false,
+          "default": "STAFF_SESSION_SECRET"
+        },
+        {
+          "id": "adminCookie",
+          "name": "Admincookie",
+          "type": "string",
+          "required": false,
+          "secret": false,
+          "default": "shop_admin"
+        },
+        {
+          "id": "staffCookie",
+          "name": "Staffcookie",
+          "type": "string",
+          "required": false,
+          "secret": false,
+          "default": "shop_staff"
+        },
+        {
+          "id": "sessionDays",
+          "name": "Sessiondays",
+          "type": "number",
+          "required": false,
+          "secret": false,
+          "default": 7
+        },
+        {
+          "id": "maximumAttempts",
+          "name": "Maximumattempts",
+          "type": "number",
+          "required": false,
+          "secret": false,
+          "default": 5
+        },
+        {
+          "id": "attemptWindowMinutes",
+          "name": "Attemptwindowminutes",
+          "type": "number",
+          "required": false,
+          "secret": false,
+          "default": 15
+        },
+        {
+          "id": "adminPin",
+          "name": "Adminpin",
+          "type": "string",
+          "required": false,
+          "secret": true
+        },
+        {
+          "id": "staffPin",
+          "name": "Staffpin",
+          "type": "string",
+          "required": false,
+          "secret": true
+        },
+        {
+          "id": "sessionSecret",
+          "name": "Sessionsecret",
+          "type": "string",
+          "required": false,
+          "secret": true
+        }
+      ]
+    },
+    {
+      "id": "consumer",
+      "name": "Example application consumer",
+      "kind": "application",
+      "status": "example",
+      "revision": "0.1.0",
+      "ports": [
+        {
+          "id": "staff-access",
+          "name": "Staff access",
+          "direction": "input",
+          "kind": "interface",
+          "type": "com.clodhub/staff-access",
+          "version": "1.0.0",
+          "required": true,
+          "cardinality": "one"
+        },
+        {
+          "id": "records",
+          "name": "Records",
+          "direction": "output",
+          "kind": "interface",
+          "type": "com.clodhub/records",
+          "version": "1.0.0"
+        }
+      ],
+      "settings": []
+    }
+  ],
+  "instances": [
+    {
+      "id": "component",
+      "name": "Staff access",
+      "definition": "com.clodhub.staff-access",
+      "configuration": {
+        "adminPin": {
+          "secretRef": "example/adminPin"
+        },
+        "staffPin": {
+          "secretRef": "example/staffPin"
+        },
+        "sessionSecret": {
+          "secretRef": "example/sessionSecret"
+        }
+      }
+    },
+    {
+      "id": "consumer",
+      "name": "Example consumer",
+      "definition": "consumer",
+      "configuration": {}
+    }
+  ],
+  "connections": [
+    {
+      "source": {
+        "instance": "component",
+        "port": "staff-access"
+      },
+      "target": {
+        "instance": "consumer",
+        "port": "staff-access"
+      }
+    },
+    {
+      "source": {
+        "instance": "consumer",
+        "port": "records"
+      },
+      "target": {
+        "instance": "component",
+        "port": "records"
+      }
+    }
+  ]
+}
