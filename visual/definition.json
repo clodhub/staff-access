@@ -4,7 +4,7 @@
   "kind": "component",
   "status": "example",
   "package": "pkg:clod/com.clodhub/staff-access",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "ports": [
     {
       "id": "records",

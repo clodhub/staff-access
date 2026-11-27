@@ -5,7 +5,7 @@ import {
   ATTEMPTS_COLLECTION, DEFAULT_SETTINGS, MINIMUM_PIN_LENGTH, MINIMUM_SECRET_LENGTH, ROLES, createStaffAccess, installedSettings, parseCookies, serialiseCookie,
   settingsFrom, type StaffAccessOptions,
 } from "../implementation/server/index.ts";
-import { sameBytes } from "../implementation/server/access.ts";
+import { clientKey, sameBytes } from "../implementation/server/access.ts";
 import { staffRoutes } from "../examples/consumer.ts";
 import { createStore } from "./fixtures/records.ts";
 import { importRendered, placeholders } from "./render.ts";
@@ -136,6 +136,46 @@ test("a right PIN clears the client's failures, and requests without an address 
   assert.equal((await access.login("admin", env.ADMIN_PIN)).ok, true);
 });
 
+test("tries sent together are each counted before their PIN is compared: no more than maximumAttempts are compared in a window", async () => {
+  const records = createStore();
+  const access = make({ records });
+  const desk = { client: "192.0.2.7" };
+  const answers = await Promise.all(Array.from({ length: 40 }, (_, index) => access.login("admin", index === 30 ? env.ADMIN_PIN : `wrong-${index}`, desk)));
+  const codes = answers.map((answer) => (answer.ok ? "ok" : answer.code));
+  assert.equal(codes.filter((code) => code === "INVALID_PIN").length, 5);
+  assert.equal(codes.filter((code) => code === "TOO_MANY_ATTEMPTS").length, 35);
+  assert.equal(codes.includes("ok"), false, "the right PIN, sent 31st, is not compared");
+  // Two servers over one store count into the same window.
+  const other = make({ records });
+  const split = await Promise.all(Array.from({ length: 10 }, (_, index) => (index % 2 ? access : other).login("staff", `wrong-${index}`, desk)));
+  assert.equal(split.filter((answer) => !answer.ok && answer.code === "INVALID_PIN").length, 5);
+  assert.equal(split.filter((answer) => !answer.ok && answer.code === "TOO_MANY_ATTEMPTS").length, 5);
+});
+
+test("an IPv6 client is counted by its /64, an IPv4 address however it is written", async () => {
+  const access = make();
+  for (let host = 1; host <= 5; host++) assert.equal((await access.login("staff", "975310", { client: `2001:db8:1:2::${host.toString(16)}` })).ok, false);
+  for (const client of ["2001:db8:1:2:ffff:ffff:ffff:ffff", "[2001:DB8:1:2::abc]:443", "2001:0db8:0001:0002::1%en0"]) {
+    assert.equal((await access.login("staff", env.STAFF_PIN, { client })).ok, false, client);
+  }
+  assert.equal((await access.login("staff", env.STAFF_PIN, { client: "2001:db8:1:3::1" })).ok, true, "the next /64 is another client");
+  for (let attempt = 0; attempt < 5; attempt++) await access.login("staff", "975310", { client: "::ffff:192.0.2.40" });
+  for (const client of ["192.0.2.40", "192.0.2.40:51234", "::ffff:c000:228", "192.000.002.040"]) {
+    assert.equal((await access.login("staff", env.STAFF_PIN, { client })).ok, false, client);
+  }
+  assert.equal((await access.login("staff", env.STAFF_PIN, { client: "192.0.2.41" })).ok, true);
+});
+
+test("clientKey gives an IPv4 address, an IPv6 address's /64 or the text it was given", () => {
+  const cases: Array<[string, string]> = [
+    ["203.0.113.9", "203.0.113.9"], [" 203.0.113.9:8080 ", "203.0.113.9"], ["::ffff:203.0.113.9", "203.0.113.9"], ["::FFFF:CB00:7109", "203.0.113.9"],
+    ["2001:db8::1", "2001:db8:0:0::/64"], ["2001:DB8:0:0:8:800:200C:417A", "2001:db8:0:0::/64"], ["[2001:db8:a:b::1]:443", "2001:db8:a:b::/64"],
+    ["fe80::1%eth0", "fe80:0:0:0::/64"], ["::", "0:0:0:0::/64"], ["1:2:3:4:5:6:7:8:9", "1:2:3:4:5:6:7:8:9"], ["2001:db8::1::2", "2001:db8::1::2"],
+    ["unknown", "unknown"], ["Guess-1", "guess-1"], ["999.1.1.1", "999.1.1.1"],
+  ];
+  for (const [given, key] of cases) assert.equal(clientKey(given), key, given);
+});
+
 test("a role without a PIN, or a server without the session secret, fails closed: 503 NOT_CONFIGURED and no cookie accepted", async () => {
   const access = make({ env: { STAFF_PIN: "246813", STAFF_SESSION_SECRET: env.STAFF_SESSION_SECRET } });
   assert.equal(access.configured("admin"), false);
@@ -255,6 +295,7 @@ test("the example routes sign the owner in, guard admin and staff routes by cook
   for (let attempt = 0; attempt < 5; attempt++) await signIn("975310", "192.0.2.66");
   const held = await signIn(env.ADMIN_PIN, "192.0.2.66");
   assert.deepEqual([held.status, held.headers.get("retry-after"), await held.json()], [429, "900", { error: "TOO_MANY_ATTEMPTS" }]);
+  assert.equal((await signIn(env.ADMIN_PIN, "203.0.113.1, 192.0.2.66")).status, 429, "an entry the client wrote before the proxy's changes nothing");
   const closed = staffRoutes({}, createStore());
   assert.equal((await closed.signIn(new Request("https://example.com/api/admin/login", { method: "POST", body: JSON.stringify({ pin: "x" }) }))).status, 503);
 });

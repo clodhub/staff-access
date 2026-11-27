@@ -154,6 +154,37 @@ function valueIn(env: Record<string, string | undefined>, variable: string, mini
 
 const isDuplicateKey = (error: unknown) => typeof error === "object" && error !== null && (error as { code?: unknown }).code === "duplicate-key";
 
+const IPV4 = /^((?:\d{1,3}\.){3}\d{1,3})(?::\d{1,5})?$/;
+
+// What a client's wrong PINs are counted under: an IPv4 address, also written as an IPv4-mapped IPv6 address or with a port; an
+// IPv6 address by its /64 network, since one subscriber is given a whole /64 and can use any address in it; other text as given.
+export function clientKey(client: string): string {
+  let text = client.trim().toLowerCase();
+  const bracketed = /^\[([^\]]+)\](?::\d{1,5})?$/.exec(text);
+  if (bracketed) text = bracketed[1];
+  text = text.replace(/%[0-9a-z._~-]+$/, "");
+  const mapped = /^::ffff:(.+)$/.exec(text);
+  const v4 = IPV4.exec(mapped ? mapped[1] : text);
+  if (v4) {
+    const octets = v4[1].split(".").map(Number);
+    return octets.every((octet) => octet <= 255) ? octets.join(".") : text;
+  }
+  if (!text.includes(":") || !/^[0-9a-f:]+$/.test(text)) return text;
+  const halves = text.split("::");
+  if (halves.length > 2) return text;
+  const head = halves[0] ? halves[0].split(":") : [];
+  const tail = halves.length === 2 && halves[1] ? halves[1].split(":") : [];
+  const missing = 8 - head.length - tail.length;
+  if (halves.length === 1 ? missing !== 0 : missing < 1) return text;
+  const groups = [...head, ...Array<string>(missing).fill("0"), ...tail];
+  if (groups.some((group) => !/^[0-9a-f]{1,4}$/.test(group))) return text;
+  const values = groups.map((group) => parseInt(group, 16));
+  if (values.slice(0, 5).every((value) => value === 0) && values[5] === 0xffff) {
+    return [values[6] >> 8, values[6] & 255, values[7] >> 8, values[7] & 255].join(".");
+  }
+  return `${values.slice(0, 4).map((value) => value.toString(16)).join(":")}::/64`;
+}
+
 export function createStaffAccess(options: StaffAccessOptions): StaffAccess {
   if (typeof options?.records?.collection !== "function") throw new TypeError("createStaffAccess needs records: a records store for the sign-in attempts");
   const settings = settingsFrom({ ...installedSettings(), ...options.settings });
@@ -227,18 +258,24 @@ export function createStaffAccess(options: StaffAccessOptions): StaffAccess {
     return hex(await sha256(`${role}\n${client}`));
   }
 
-  async function countFailure(id: string, role: Role, at: Date): Promise<void> {
+  // One more try in the client's window, or the first try of a new window: the document as counted.
+  async function countTry(id: string, role: Role, at: Date): Promise<AttemptDocument> {
     const live = { _id: id, expiresAt: { $gt: at } };
-    if (await attempts.findOneAndUpdate(live, { $inc: { failures: 1 } }, { returnDocument: "after" })) return;
-    const fresh = { $set: { role, failures: 1, startedAt: at, expiresAt: new Date(at.getTime() + windowMs) } };
+    const counted = await attempts.findOneAndUpdate(live, { $inc: { failures: 1 } }, { returnDocument: "after" });
+    if (counted) return counted;
+    const fresh = { role, failures: 1, startedAt: at, expiresAt: new Date(at.getTime() + windowMs) };
     try {
-      await attempts.updateOne({ _id: id }, fresh, { upsert: true });
+      // Only an ended window is replaced: while another try opens this one, the insert meets its _id.
+      await attempts.updateOne({ _id: id, expiresAt: { $lte: at } }, { $set: fresh }, { upsert: true });
+      return { _id: id, ...fresh };
     } catch (error) {
-      // Another failure from the same client opened the window first.
       if (!isDuplicateKey(error)) throw error;
-      await attempts.findOneAndUpdate(live, { $inc: { failures: 1 } }, { returnDocument: "after" });
+      return (await attempts.findOneAndUpdate(live, { $inc: { failures: 1 } }, { returnDocument: "after" })) ?? { _id: id, ...fresh };
     }
   }
+
+  const tooMany = (held: AttemptDocument, at: Date): LoginResult =>
+    ({ ok: false, status: 429, code: "TOO_MANY_ATTEMPTS", retryAfter: Math.max(1, Math.ceil((new Date(held.expiresAt).getTime() - at.getTime()) / 1000)) });
 
   return {
     settings,
@@ -247,20 +284,19 @@ export function createStaffAccess(options: StaffAccessOptions): StaffAccess {
     async login(role, pin, loginOptions = {}) {
       checkRole(role);
       if (!open(role)) return { ok: false, status: 503, code: "NOT_CONFIGURED" };
-      const client = typeof loginOptions.client === "string" && loginOptions.client.trim() !== "" ? loginOptions.client.trim() : "unknown";
-      const id = await attemptId(role, client);
+      const client = typeof loginOptions.client === "string" && loginOptions.client.trim() !== "" ? loginOptions.client : "unknown";
+      const id = await attemptId(role, clientKey(client));
       await ensureIndexes();
       const at = now();
       const held = await attempts.findOne({ _id: id, expiresAt: { $gt: at } });
-      if (held && held.failures >= settings.maximumAttempts) {
-        return { ok: false, status: 429, code: "TOO_MANY_ATTEMPTS", retryAfter: Math.max(1, Math.ceil((new Date(held.expiresAt).getTime() - at.getTime()) / 1000)) };
-      }
+      if (held && held.failures >= settings.maximumAttempts) return tooMany(held, at);
+      // Every try is counted before its PIN is compared, so tries sent together cannot slip past the limit between the check and
+      // the count; a right PIN then clears the count.
+      const counted = await countTry(id, role, at);
+      if (counted.failures > settings.maximumAttempts) return tooMany(counted, at);
       // A missing, empty or non-text PIN takes the same path as a wrong one.
       const [given, expected] = await Promise.all([sha256(typeof pin === "string" ? pin : ""), sha256(pins[role] ?? "")]);
-      if (!sameBytes(given, expected)) {
-        await countFailure(id, role, at);
-        return { ok: false, status: 401, code: "INVALID_PIN" };
-      }
+      if (!sameBytes(given, expected)) return { ok: false, status: 401, code: "INVALID_PIN" };
       await attempts.deleteOne({ _id: id });
       const expires = seconds() + lifetime;
       const token = `${expires}.${base64url(await sign(role, expires))}`;

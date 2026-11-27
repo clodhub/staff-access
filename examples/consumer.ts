@@ -5,8 +5,9 @@ import { createStaffAccess, type RecordsLike } from "../implementation/server/in
 export function staffRoutes(env: Record<string, string | undefined>, records: RecordsLike, now?: () => Date) {
   const access = createStaffAccess({ records, env, now, secure: true });
   const refuse = () => Response.json({ error: "UNAUTHORISED" }, { status: 401 });
-  // The client's address as the host's proxy gives it, for the limit on wrong PINs.
-  const client = (request: Request) => request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "unknown";
+  // The client's address as the host's own proxy wrote it, for the limit on wrong PINs: the last X-Forwarded-For entry, since a
+  // client can write the first ones.
+  const client = (request: Request) => request.headers.get("x-forwarded-for")?.split(",").at(-1)?.trim() || "unknown";
   return {
     async signIn(request: Request): Promise<Response> {
       const body: unknown = await request.json().catch(() => null);
